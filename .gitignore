@@ -1,0 +1,7 @@
+# 本地工具与离线分发产物（不随 GitHub Pages 站点发布，文件仍保留在本机）
+local/
+
+# 系统与编辑器杂项
+Thumbs.db
+.DS_Store
+.idea/

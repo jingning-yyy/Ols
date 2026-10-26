@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OLS 回归工作台 · k 与 b 计算工具</title>
+<script src="xlsx.full.min.js"></script>
+<script>
+if (typeof XLSX === 'undefined') {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
+}
+</script>
+<style>
+  :root{
+    --accent:#2563eb; --accent-weak:#dbeafe; --ink:#111827; --muted:#6b7280;
+    --line:#e5e7eb; --bg:#f3f4f6; --card:#ffffff; --ok:#059669; --err:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.65 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:34px 20px 70px}
+  h1{font-size:23px;margin:0 0 6px}
+  h2{font-size:16px;margin:0 0 12px}
+  .sub{color:var(--muted);font-size:13.5px;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .drop{text-align:center;padding:38px 16px;border:2px dashed #c7d2fe;border-radius:12px;
+        cursor:pointer;transition:background .15s,border-color .15s;background:#f8faff}
+  .drop:hover,.drop.drag{background:var(--accent-weak);border-color:var(--accent)}
+  .link{color:var(--accent);font-weight:700;font-size:18px;text-decoration:underline}
+  .drop.drag .link{color:#1d4ed8}
+  .hint{color:var(--muted);font-size:13px;margin-top:10px}
+  .hint a{color:var(--accent);text-decoration:none;font-weight:600}
+  .hint a:hover{text-decoration:underline}
+  .filename{margin-top:12px;font-size:13.5px;color:var(--muted);word-break:break-all}
+  .filename b{color:var(--ink)}
+  .msg{display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:14px}
+  .msg.err{display:block;background:#fef2f2;color:var(--err);border:1px solid #fecaca}
+  .msg.ok{display:block;background:#ecfdf5;color:var(--ok);border:1px solid #a7f3d0}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 18px;
+         font-size:14px;cursor:pointer}
+  button:hover{background:#1d4ed8}
+  button:disabled{background:#9ca3af;cursor:not-allowed}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:6px 10px;text-align:right;white-space:nowrap}
+  th{background:#f9fafb}
+  th:first-child,td:first-child{text-align:left}
+  .pv th{text-align:left}
+  .badge{display:inline-block;font-size:11px;font-weight:600;border-radius:20px;
+         padding:1px 8px;margin-left:6px;vertical-align:1px}
+  .bx{background:var(--accent-weak);color:#1d4ed8}
+  .by{background:#d1fae5;color:#047857}
+  .bs{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}
+  .results{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch}
+  .param{flex:1 1 220px;background:#f8faff;border:1px solid var(--line);border-radius:12px;
+         padding:16px 20px;text-align:center}
+  .param .name{color:var(--muted);font-size:13.5px}
+  .param .val{font-size:30px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;
+              margin-top:2px;word-break:break-all}
+  .param.b .val{color:var(--ok)}
+  .eq{margin:16px 0 4px;padding:12px 16px;background:#f8faff;border:1px solid var(--line);
+      border-radius:8px;font-size:16px;font-family:Consolas,monospace;overflow-x:auto}
+  .stats{color:var(--muted);font-size:13.5px;margin-top:10px}
+  .stats b{color:var(--ink)}
+  canvas{width:100%;height:320px;display:block}
+  .legend{font-size:12.5px;color:var(--muted);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap}
+  .legend span::before{content:"";display:inline-block;width:18px;height:3px;border-radius:2px;
+                       margin-right:6px;vertical-align:3px;background:var(--c)}
+  .scroll{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .scroll table{margin:0}
+  .scroll th{position:sticky;top:0}
+  .more{color:var(--muted);text-align:center;padding:4px}
+  .hidden{display:none}
+  .tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+  .tab{background:transparent;color:var(--muted);border:0;border-bottom:2px solid transparent;
+       border-radius:6px 6px 0 0;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer}
+  .tab:hover{color:var(--ink);background:#f3f4f6}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;
+           padding:10px 12px;font:13px/1.5 Consolas,monospace;resize:vertical;background:#fcfcfd}
+  textarea:focus{outline:2px solid var(--accent-weak);border-color:var(--accent)}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .btn2{background:#eef2ff;color:#1d4ed8;border:0;border-radius:8px;padding:8px 16px;
+        font-size:13.5px;cursor:pointer}
+  .btn2:hover{background:#e0e7ff}
+  #editorTable table{margin:0}
+  .hcell,.dcell{width:88px;border:1px solid transparent;background:transparent;padding:5px 6px;
+                font-size:13.5px;text-align:right;border-radius:6px;font-family:inherit}
+  .hcell{text-align:center;font-weight:700;color:var(--accent)}
+  .hcell:hover,.hcell:focus,.dcell:hover,.dcell:focus{border-color:var(--accent);background:#fff;outline:none}
+  #editorTable td:first-child,#editorTable th:first-child{width:40px;text-align:center;padding:4px}
+  .xbtn{background:#f3f4f6;color:#9ca3af;border:0;border-radius:6px;width:22px;height:22px;
+        line-height:1;cursor:pointer;padding:0;font-size:13px;vertical-align:middle}
+  .xbtn:hover{background:#fee2e2;color:var(--err)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>最小二乘拟合</h1>
+  <div class="sub">模型：y = k·x + b（多自变量时为 y = k₁x₁ + k₂x₂ + … + b）。Excel 最后一列为因变量 y，其余数值列为自变量 x，序号列自动排除。</div>
+
+  <div class="card">
+    <div class="tabs">
+      <button type="button" class="tab active" id="tabFile">📁 上传文件</button>
+      <button type="button" class="tab" id="tabManual">📋 手动粘贴 / 输入</button>
+    </div>
+    <div id="filePanel">
+      <div class="drop" id="dropZone">
+        <span class="link">📁 点击上传 Excel 文件</span>
+        <div class="hint">支持 .xlsx / .xls / .csv（读取第一个工作表），也可以直接把文件拖进来</div>
+        <div class="hint">没有数据？下载示例试试：<a href="data/demo-1var.xlsx" download>demo-1var.xlsx</a>（单自变量，y ≈ 2.49x + 1.37）　<a href="data/demo-2var.xlsx" download>demo-2var.xlsx</a>（双自变量，y = 2x₁ + 3x₂ + 1）</div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
+      </div>
+    </div>
+    <div class="filename hidden" id="filename"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card hidden" id="manualCard">
+    <h2>手动输入数据</h2>
+    <div class="hint" style="margin-top:0">方式一：在 Excel / WPS 里选中数据区复制，粘贴到下面文本框（支持 Tab / 逗号 / 分号 / 空格分隔，首行可为表头），点「解析到表格」。</div>
+    <textarea id="pasteArea" placeholder="例如：&#10;x&#9;y&#10;1&#9;3.2&#10;2&#9;5.1&#10;3&#9;7.8&#10;（从 Excel 直接 Ctrl+V 也可以）"></textarea>
+    <div class="btnrow">
+      <button type="button" class="btn2" id="parsePaste">解析到表格</button>
+      <button type="button" class="btn2" id="fillExample">填入示例</button>
+      <button type="button" class="btn2" id="clearAll">清空</button>
+    </div>
+    <div class="hint" style="margin-top:16px">方式二：直接在下方表格里逐格填写（最后一列是 y，其余是 x），可随时增删行、列和改表头。序号列同样会被自动排除。</div>
+    <div id="editorTable" class="scroll" style="max-height:340px"></div>
+    <div class="btnrow">
+      <button type="button" class="btn2" id="addRow">＋ 加一行</button>
+      <button type="button" class="btn2" id="addCol">＋ 加一列</button>
+      <button type="button" id="manualCompute">用表格数据开始计算</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="previewCard">
+    <h2>数据预览（列角色自动识别）</h2>
+    <div class="pv" id="preview"></div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>拟合结果</h2>
+    <div class="results" id="results"></div>
+    <div class="eq" id="eq"></div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card hidden" id="fitCard">
+    <h2>预测值 vs 真实值</h2>
+    <canvas id="fitChart" width="900" height="320"></canvas>
+    <div class="legend" id="fitLegend"></div>
+    <div class="hint" id="fitHint"></div>
+  </div>
+</div>
+
+<script>
+/* ===== ALGO-START ===== */
+function olsFit(X, y) {
+  var n = X.length, m0 = X[0].length, m = m0 + 1;   // 参数 = 自变量个数 + 截距 b
+  // 按列缩放消除量纲差异，避免大数值列淹没小数值列（截距列固定为 1）
+  var scale = [];
+  for (var j = 0; j < m0; j++) {
+    var sc = 0;
+    for (var t = 0; t < n; t++) sc = Math.max(sc, Math.abs(X[t][j]));
+    if (sc === 0) throw new Error('第 ' + (j + 1) + ' 个自变量全为 0，无法求解');
+    scale.push(sc);
+  }
+  scale.push(1);
+  var A = [], b = [];
+  for (var i = 0; i < m; i++) { A.push(new Array(m).fill(0)); b.push(0); }
+  for (t = 0; t < n; t++) {
+    var phi = [];
+    for (j = 0; j < m0; j++) phi.push(X[t][j] / scale[j]);
+    phi.push(1);
+    for (i = 0; i < m; i++) {
+      for (var j2 = 0; j2 < m; j2++) A[i][j2] += phi[i] * phi[j2];
+      b[i] += phi[i] * y[t];
+    }
+  }
+  var maxAbs = 0;
+  for (i = 0; i < m; i++) for (j2 = 0; j2 < m; j2++) maxAbs = Math.max(maxAbs, Math.abs(A[i][j2]));
+  if (maxAbs === 0) throw new Error('数据全为 0，无法求解');
+  var tol = maxAbs * 1e-10;
+  // 高斯消元（列主元）解正规方程 A·θ = b
+  for (var col = 0; col < m; col++) {
+    var piv = col;
+    for (var r2 = col + 1; r2 < m; r2++) if (Math.abs(A[r2][col]) > Math.abs(A[piv][col])) piv = r2;
+    if (Math.abs(A[piv][col]) <= tol) throw new Error('自变量线性相关（或数据不足），方程没有唯一解');
+    if (piv !== col) {
+      var tmp = A[col]; A[col] = A[piv]; A[piv] = tmp;
+      var tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+    }
+    for (r2 = col + 1; r2 < m; r2++) {
+      var f = A[r2][col] / A[col][col];
+      for (var c2 = col; c2 < m; c2++) A[r2][c2] -= f * A[col][c2];
+      b[r2] -= f * b[col];
+    }
+  }
+  var theta = new Array(m).fill(0);
+  for (var r3 = m - 1; r3 >= 0; r3--) {
+    var s = b[r3];
+    for (var c3 = r3 + 1; c3 < m; c3++) s -= A[r3][c3] * theta[c3];
+    theta[r3] = s / A[r3][r3];
+  }
+  for (j = 0; j < m0; j++) theta[j] /= scale[j];
+  return { theta: theta };
+}
+/* ===== ALGO-END ===== */
+
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var parsed = null;
+  var lastFit = null;   // {header, roles, names, xIdx, yIdx, nums, nRows, excluded}
+  var dropZone = $('dropZone'), fileInput = $('fileInput'), msg = $('msg');
+
+  dropZone.addEventListener('click', function () { fileInput.click(); });
+  dropZone.addEventListener('dragover', function (e) { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('drag'); });
+  dropZone.addEventListener('drop', function (e) {
+    e.preventDefault(); dropZone.classList.remove('drag');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', function (e) {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  function showMsg(text, ok) {
+    msg.className = 'msg ' + (ok ? 'ok' : 'err');
+    msg.textContent = text;
+  }
+  function clearMsg() { msg.className = 'msg'; msg.textContent = ''; }
+
+  function handleFile(file) {
+    clearMsg();
+    var nameOk = /\.(xlsx|xls|csv)$/i.test(file.name);
+    if (!nameOk) { showMsg('请上传 .xlsx / .xls / .csv 文件'); return; }
+    if (typeof XLSX === 'undefined') { showMsg('Excel 解析库（xlsx.full.min.js）加载失败，请确认该文件与网页在同一文件夹，或检查网络后刷新重试'); return; }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var bytes = new Uint8Array(ev.target.result);
+        var wb;
+        if (/\.csv$/i.test(file.name)) {
+          // 国内 Excel 导出的 CSV 常为 GBK 编码：先按 UTF-8 严格解码，失败则回退 GBK
+          var text;
+          try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+          catch (e2) { text = new TextDecoder('gbk').decode(bytes); }
+          wb = XLSX.read(text, { type: 'string' });
+        } else {
+          wb = XLSX.read(bytes, { type: 'array' });
+        }
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws) throw new Error('第一个工作表为空');
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+        parseAndFit(rows, file.name, wb.SheetNames[0]);
+      } catch (err) {
+        showMsg('解析失败：' + err.message);
+      }
+    };
+    reader.onerror = function () { showMsg('读取文件失败'); };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function toNum(v) {
+    if (v === null || v === undefined) return NaN;
+    var t = String(v).trim();
+    if (t === '') return NaN;
+    var n = Number(t);
+    return isNaN(n) ? NaN : n;
+  }
+
+  function parseAndFit(rawRows, fileName, sheetName, explicitHeader) {
+    var rows = rawRows.filter(function (r) {
+      return r && r.some(function (v) { return v !== null && v !== undefined && String(v).trim() !== ''; });
+    });
+    if (rows.length === 0) throw new Error('没有读到任何有效数据');
+
+    // 表头：手动输入时直接指定（调用方已把表头行放在 rawRows[0]，这里剔除）；
+    // 文件上传时按首行是否含非数值自动识别
+    var header = null;
+    if (explicitHeader) {
+      header = explicitHeader.slice();
+      rows = rows.slice(1);
+    } else {
+      var firstNumeric = rows[0].every(function (v) { return !isNaN(toNum(v)); });
+      if (!firstNumeric) {
+        header = rows[0].map(function (v, i) {
+          var s = (v === null || v === undefined) ? '' : String(v).trim();
+          return s === '' ? '列' + (i + 1) : s;
+        });
+        rows = rows.slice(1);
+      }
+    }
+    if (rows.length < 3) throw new Error('有效数据行太少（至少需要 3 行）');
+
+    var ncols = rows.reduce(function (mx, r) { return Math.max(mx, r.length); }, 0);
+    if (ncols < 2) throw new Error('至少需要 2 列（1 列自变量 + 1 列因变量）');
+
+    // 转数值矩阵
+    var nums = rows.map(function (r) {
+      var out = new Array(ncols);
+      for (var c = 0; c < ncols; c++) out[c] = toNum(r[c]);
+      return out;
+    });
+
+    // 列角色：默认 x；最后一列为 y；识别序号列并排除
+    var names = header ? header.slice(0, ncols) : [];
+    for (var c = names.length; c < ncols; c++) names[c] = (c === ncols - 1) ? 'y' : 'x' + (c + 1);
+    var roles = new Array(ncols).fill('x');   // 'x' | 'y' | 'skip'
+    roles[ncols - 1] = 'y';
+    var idxRe = /^(序号|编号|索引|序号列|index|no\.?|id|#)$/i;
+    var candidates = [];
+    for (c = 0; c < ncols - 1; c++) {
+      var byName = header && idxRe.test(names[c]);
+      var byValue = false;
+      if (!byName && nums.length >= 3) {
+        byValue = true;
+        for (var r = 0; r < nums.length; r++) {
+          var v = nums[r][c];
+          if (!(Number.isInteger(v) && v === r + 1)) { byValue = false; break; }
+        }
+      }
+      if (byName || byValue) candidates.push({ col: c, byName: byName, byValue: byValue });
+    }
+
+    // 阶梯式排除：全排除后若无自变量可用，则只按表头名排除；再不行就全保留
+    var excluded = [], indexNote = '';
+    function applyExclusions(pred) {
+      roles = new Array(ncols).fill('x');
+      roles[ncols - 1] = 'y';
+      excluded = [];
+      candidates.forEach(function (cd) {
+        if (pred(cd)) {
+          roles[cd.col] = 'skip';
+          excluded.push({ name: names[cd.col],
+            reason: cd.byName ? '表头为序号类名称' : '取值为连续整数 1~' + nums.length });
+        }
+      });
+      var ok = false;
+      for (var cc = 0; cc < ncols - 1; cc++) if (roles[cc] === 'x') { ok = true; break; }
+      return ok;
+    }
+    if (!applyExclusions(function () { return true; })) {
+      if (!applyExclusions(function (cd) { return cd.byName; }) && candidates.length) {
+        applyExclusions(function () { return false; });
+        indexNote = '有 ' + candidates.length + ' 列形似序号，但为保证有自变量可用，已全部保留参与拟合';
+      }
+    }
+
+    // 数值校验
+    for (c = 0; c < ncols; c++) {
+      if (roles[c] === 'skip') continue;
+      for (var r2 = 0; r2 < nums.length; r2++) {
+        if (isNaN(nums[r2][c])) {
+          throw new Error('第 ' + names[c] + ' 列存在非数值内容（第 ' + (r2 + (header ? 2 : 1)) + ' 行：「' +
+            (rawRows[r2 + (header ? 1 : 0)][c] === null ? '空' : String(rawRows[r2 + (header ? 1 : 0)][c]).trim()) + '」），无法进行拟合');
+        }
+      }
+    }
+
+    var xIdx = []; for (c = 0; c < ncols - 1; c++) if (roles[c] === 'x') xIdx.push(c);
+    if (xIdx.length === 0) throw new Error('没有可用的自变量列（序号列不能作为自变量，请检查数据）');
+
+    parsed = { header: header, names: names, roles: roles, xIdx: xIdx, yIdx: ncols - 1,
+               nums: nums, nRows: nums.length, excluded: excluded, indexNote: indexNote };
+
+    $('filename').className = 'filename';
+    $('filename').innerHTML = '已加载：<b>' + escapeHtml(fileName) + '</b>（工作表「' + escapeHtml(sheetName) + '」，' +
+      nums.length + ' 行 × ' + ncols + ' 列）';
+    renderPreview();
+    $('previewCard').className = 'card';
+    ['resultCard', 'fitCard'].forEach(function (id) { $(id).className = 'card'; });
+    compute();
+    showMsg('计算完成', true);
+  }
+
+  function compute() {
+    var X = parsed.nums.map(function (row) { return parsed.xIdx.map(function (c) { return row[c]; }); });
+    var y = parsed.nums.map(function (row) { return row[parsed.yIdx]; });
+    var res = olsFit(X, y);
+    lastFit = res;
+    renderResult(res);
+    drawFitChart(res);
+  }
+
+  function paramNames() {
+    var ks = parsed.xIdx.map(function (c) { return parsed.names[c]; });
+    return ks.concat(['b']);
+  }
+
+  function fmt(v) {
+    if (!isFinite(v)) return String(v);
+    var a = Math.abs(v);
+    var s = (a !== 0 && (a < 1e-4 || a >= 1e7)) ? v.toExponential(5) : v.toPrecision(7);
+    return String(parseFloat(s));
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  function renderPreview() {
+    var head = '<tr><th>行号</th>' + parsed.names.map(function (nm, c) {
+      var badge = parsed.roles[c] === 'y' ? '<span class="badge by">因变量 y</span>'
+                : parsed.roles[c] === 'skip' ? '<span class="badge bs">已排除·序号</span>'
+                : '<span class="badge bx">自变量 x</span>';
+      return '<th>' + escapeHtml(nm) + badge + '</th>';
+    }).join('') + '</tr>';
+    var showN = Math.min(8, parsed.nums.length);
+    var body = '';
+    for (var r = 0; r < showN; r++) {
+      body += '<tr><td>' + (r + 1) + '</td>' + parsed.nums[r].map(function (v) {
+        return '<td' + (parsed.roles[parsed.nums[r].indexOf(v)] === 'skip' ? ' style="color:#9ca3af"' : '') + '>' + fmt(v) + '</td>';
+      }).join('') + '</tr>';
+    }
+    if (parsed.nums.length > showN) body += '<tr><td colspan="' + (parsed.names.length + 1) + '" class="more">… 共 ' + parsed.nums.length + ' 行 …</td></tr>';
+    var note = '';
+    if (parsed.excluded.length) {
+      note = '<div class="hint">已排除序号列：' + parsed.excluded.map(function (e) {
+        return '「' + escapeHtml(e.name) + '」（' + e.reason + '）';
+      }).join('、') + '</div>';
+    } else if (parsed.indexNote) {
+      note = '<div class="hint">' + escapeHtml(parsed.indexNote) + '</div>';
+    }
+    $('preview').innerHTML = '<table>' + head + body + '</table>' + note;
+  }
+
+  function renderResult(res) {
+    var th = res.theta, names = paramNames();
+    // 数据尺度：浮点舍入残余相对数据量级可忽略时（< 十亿分之一）按 0 显示
+    var scale = 0;
+    parsed.nums.forEach(function (row) { scale = Math.max(scale, Math.abs(row[parsed.yIdx])); });
+    th.forEach(function (v) { scale = Math.max(scale, Math.abs(v)); });
+    if (scale === 0) scale = 1;
+    var EPS = scale * 1e-9;
+    function snap(v) { return Math.abs(v) < EPS ? 0 : v; }
+    var thD = th.map(snap);
+    var html = '';
+    var single = th.length === 2;
+    for (var j = 0; j < thD.length; j++) {
+      var isB = j === thD.length - 1;
+      if (single || !isB || true) {
+        html += '<div class="param' + (isB ? ' b' : '') + '"><div class="name">' +
+          (isB ? 'b（截距）' : 'k' + (single ? '' : (j + 1) + '（' + escapeHtml(names[j]) + '）')) + '</div>' +
+          '<div class="val">' + fmt(thD[j]) + '</div></div>';
+      }
+    }
+    $('results').innerHTML = html;
+
+    // 方程排版：负号独立处理，避免出现 "+ -5"
+    var eq = 'y = ';
+    for (j = 0; j < parsed.xIdx.length; j++) {
+      var v = thD[j], term = fmt(Math.abs(v)) + '·' + parsed.names[parsed.xIdx[j]];
+      eq += (j === 0 ? (v < 0 ? '-' : '') + term : (v < 0 ? ' - ' : ' + ') + term);
+    }
+    var bv = thD[thD.length - 1];
+    eq += (bv < 0 ? ' - ' : ' + ') + fmt(Math.abs(bv));
+    $('eq').textContent = eq;
+
+    // 拟合优度：用最终参数回代全部样本
+    var n = parsed.nums.length, sse = 0, sst = 0, sum = 0;
+    parsed.nums.forEach(function (row) { sum += row[parsed.yIdx]; });
+    var ybar = sum / n;
+    parsed.nums.forEach(function (row) {
+      var yh = 0;
+      for (var j = 0; j < parsed.xIdx.length; j++) yh += th[j] * row[parsed.xIdx[j]];
+      yh += th[th.length - 1];
+      var e = row[parsed.yIdx] - yh;
+      sse += e * e;
+      sst += (row[parsed.yIdx] - ybar) * (row[parsed.yIdx] - ybar);
+    });
+    var r2 = sst === 0 ? 1 : 1 - sse / sst;
+    var rmse = Math.sqrt(sse / n);
+    if (rmse < EPS) rmse = 0;
+    $('stats').innerHTML = '样本数 n = <b>' + n + '</b>　·　R² = <b>' + fmt(r2) + '</b>　·　RMSE = <b>' + fmt(rmse) + '</b>　·　普通最小二乘：全部样本一次求解';
+  }
+
+  function drawFitChart(res) {
+    var canvas = $('fitChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.clientWidth || 900, H = 320;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // 用最终参数回代得到预测值；单自变量按 x 实际值排列，多自变量按真实值升序排列
+    var th = res.theta;
+    var single = parsed.xIdx.length === 1;
+    var pts = parsed.nums.map(function (row) {
+      var yh = th[th.length - 1];
+      for (var j = 0; j < parsed.xIdx.length; j++) yh += th[j] * row[parsed.xIdx[j]];
+      return { y: row[parsed.yIdx], yhat: yh, x: single ? row[parsed.xIdx[0]] : 0 };
+    });
+    if (single) pts.sort(function (a, b) { return a.x - b.x; });
+    else pts.sort(function (a, b) { return a.y - b.y; });
+
+    var m = { l: W < 520 ? 48 : 64, r: W < 520 ? 10 : 16, t: 14, b: 34 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var n = pts.length;
+    var min = Infinity, max = -Infinity;
+    pts.forEach(function (p) {
+      if (p.y < min) min = p.y; if (p.y > max) max = p.y;
+      if (p.yhat < min) min = p.yhat; if (p.yhat > max) max = p.yhat;
+    });
+    if (min === max) { min -= 1; max += 1; }
+    var pad = (max - min) * 0.08; min -= pad; max += pad;
+    function ypix(v) { return m.t + ih * (1 - (v - min) / (max - min)); }
+
+    // 每个点的横像素位置
+    var xs = [];
+    var xlo = 0, xhi = 1;
+    if (single) {
+      xlo = Infinity; xhi = -Infinity;
+      pts.forEach(function (p) { if (p.x < xlo) xlo = p.x; if (p.x > xhi) xhi = p.x; });
+      if (xlo === xhi) { xlo -= 1; xhi += 1; }
+      pts.forEach(function (p) { xs.push(m.l + iw * (p.x - xlo) / (xhi - xlo)); });
+    } else {
+      pts.forEach(function (p, i) { xs.push(m.l + iw * (n === 1 ? 0.5 : i / (n - 1))); });
+    }
+
+    // 网格与纵轴刻度
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.strokeStyle = '#eef0f3'; ctx.lineWidth = 1;
+    for (var g = 0; g <= 4; g++) {
+      var gv = min + (max - min) * g / 4, gy = m.t + ih * (1 - g / 4);
+      ctx.beginPath(); ctx.moveTo(m.l, gy); ctx.lineTo(W - m.r, gy); ctx.stroke();
+      ctx.fillStyle = '#6b7280'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(fmt(Math.abs(gv) < 1e-12 ? 0 : gv), m.l - 8, gy);
+    }
+
+    // 横轴刻度
+    var tickDefs = [];
+    if (single) {
+      [xlo, (xlo + xhi) / 2, xhi].forEach(function (v) {
+        tickDefs.push({ label: fmt(v), px: m.l + iw * (v - xlo) / (xhi - xlo) });
+      });
+    } else if (n <= 8) {
+      for (var tk = 1; tk <= n; tk++) {
+        tickDefs.push({ label: String(tk), px: m.l + iw * (n === 1 ? 0.5 : (tk - 1) / (n - 1)) });
+      }
+    } else {
+      [1, Math.floor(n / 2), n].forEach(function (sp) {
+        if (tickDefs.every(function (d) { return d.label !== String(sp); }))
+          tickDefs.push({ label: String(sp), px: m.l + iw * (n === 1 ? 0.5 : (sp - 1) / (n - 1)) });
+      });
+    }
+    ctx.fillStyle = '#9ca3af';
+    tickDefs.forEach(function (d) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(d.label, d.px, H - m.b + 6);
+    });
+    ctx.textAlign = 'center';
+    ctx.fillText(single ? ('自变量「' + parsed.names[parsed.xIdx[0]] + '」实际值 →')
+                        : '样本位次（按真实值升序）→', m.l + iw / 2, H - 11);
+
+    // 曲线：蓝 = 真实值，红虚线 = 预测值
+    function drawLine(getV, color, dash) {
+      ctx.strokeStyle = color; ctx.lineWidth = 1.8;
+      ctx.setLineDash(dash || []);
+      ctx.beginPath();
+      for (var i = 0; i < n; i++) {
+        var px = xs[i], py = ypix(getV(pts[i]));
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawLine(function (p) { return p.y; }, '#2563eb');
+    drawLine(function (p) { return p.yhat; }, '#dc2626', [6, 4]);
+    if (n <= 40) {
+      ctx.fillStyle = '#2563eb';
+      for (var i2 = 0; i2 < n; i2++) {
+        ctx.beginPath(); ctx.arc(xs[i2], ypix(pts[i2].y), 2.5, 0, 6.2832); ctx.fill();
+      }
+    }
+
+    $('fitLegend').innerHTML =
+      '<span style="--c:#2563eb">真实值 y</span>' +
+      '<span style="--c:#dc2626">预测值 ŷ（最终参数回代）</span>';
+    $('fitHint').textContent = single
+      ? '横轴为自变量「' + parsed.names[parsed.xIdx[0]] + '」的实际值（升序）。蓝点为真实样本，红虚线为拟合值；红虚线偏离蓝点越多，该点误差越大。'
+      : '横轴不是原始顺序：样本已按真实值 y 从小到大排列后重新编号，红线（预测）越贴合蓝线（真实），拟合越好。';
+  }
+  /* ---------- 手动粘贴 / 手动输入 ---------- */
+  var editor = { header: ['x', 'y'], rows: [['', ''], ['', ''], ['', '']] };
+  var editorTable = $('editorTable');
+
+  function renderEditor() {
+    var table = document.createElement('table');
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr');
+    hr.appendChild(document.createElement('th'));
+    editor.header.forEach(function (name, c) {
+      var th = document.createElement('th');
+      var inp = document.createElement('input');
+      inp.className = 'hcell';
+      inp.value = name;
+      th.appendChild(inp);
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'xbtn'; del.textContent = '×';
+      del.title = '删除此列';
+      del.setAttribute('data-delcol', c);
+      th.appendChild(document.createTextNode(' '));
+      th.appendChild(del);
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    editor.rows.forEach(function (row, r) {
+      var tr = document.createElement('tr');
+      var td0 = document.createElement('td');
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'xbtn'; del.textContent = '×';
+      del.title = '删除此行';
+      del.setAttribute('data-delrow', r);
+      td0.appendChild(del);
+      tr.appendChild(td0);
+      editor.header.forEach(function (_, c) {
+        var td = document.createElement('td');
+        var inp = document.createElement('input');
+        inp.className = 'dcell';
+        inp.inputMode = 'decimal';
+        inp.value = row[c] === undefined ? '' : row[c];
+        td.appendChild(inp);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    editorTable.innerHTML = '';
+    editorTable.appendChild(table);
+  }
+
+  function syncEditorFromDOM() {
+    var heads = editorTable.querySelectorAll('thead input');
+    if (heads.length) {
+      editor.header = Array.prototype.map.call(heads, function (i) { return i.value; });
+    }
+    editor.rows = Array.prototype.map.call(editorTable.querySelectorAll('tbody tr'), function (tr) {
+      return Array.prototype.map.call(tr.querySelectorAll('td input'), function (i) { return i.value; });
+    });
+  }
+
+  function parsePastedText() {
+    var text = $('pasteArea').value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!text) { showMsg('请先在文本框里粘贴数据'); return; }
+    var rows = text.split('\n').map(function (ln) {
+      var cells;
+      if (ln.indexOf('\t') >= 0) cells = ln.split('\t');
+      else if (ln.split(',').length > 1) cells = ln.split(',');
+      else if (ln.split(';').length > 1) cells = ln.split(';');
+      else cells = ln.trim().split(/\s+/);
+      while (cells.length && String(cells[cells.length - 1]).trim() === '') cells.pop();
+      return cells;
+    }).filter(function (cells) { return cells.length > 0; });
+    if (!rows.length) { showMsg('没有解析到有效内容'); return; }
+    var w = rows.reduce(function (mx, r) { return Math.max(mx, r.length); }, 0);
+    rows.forEach(function (r) { while (r.length < w) r.push(''); });
+    var firstNumeric = rows[0].every(function (v) { return !isNaN(toNum(v)); });
+    if (firstNumeric) {
+      editor.header = rows[0].map(function (_, i) { return '列' + (i + 1); });
+    } else {
+      editor.header = rows[0].map(function (v, i) {
+        var s = String(v).trim();
+        return s === '' ? '列' + (i + 1) : s;
+      });
+      rows = rows.slice(1);
+    }
+    editor.rows = rows.map(function (r) {
+      return r.map(function (v) { return String(v).trim(); });
+    });
+    renderEditor();
+    showMsg('已解析 ' + editor.rows.length + ' 行 × ' + editor.header.length +
+      ' 列到表格，可直接修改后点「用表格数据开始计算」', true);
+  }
+
+  function setInputMode(mode) {
+    $('tabFile').className = 'tab' + (mode === 'file' ? ' active' : '');
+    $('tabManual').className = 'tab' + (mode === 'manual' ? ' active' : '');
+    $('filePanel').className = mode === 'file' ? '' : 'hidden';
+    $('manualCard').className = 'card' + (mode === 'manual' ? '' : ' hidden');
+    if (mode === 'manual') $('manualCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  $('tabFile').addEventListener('click', function () { setInputMode('file'); });
+  $('tabManual').addEventListener('click', function () { setInputMode('manual'); });
+  setInputMode('file');
+  $('parsePaste').addEventListener('click', parsePastedText);
+  $('fillExample').addEventListener('click', function () {
+    editor.header = ['x', 'y'];
+    editor.rows = [[1, 2.8], [2, 5.3], [3, 7.6], [4, 10.4], [5, 12.5], [6, 15.3]];
+    $('pasteArea').value = '';
+    renderEditor();
+  });
+  $('clearAll').addEventListener('click', function () {
+    $('pasteArea').value = '';
+    editor.header = ['x', 'y'];
+    editor.rows = [['', ''], ['', ''], ['', '']];
+    renderEditor();
+  });
+  $('addRow').addEventListener('click', function () {
+    syncEditorFromDOM();
+    editor.rows.push(editor.header.map(function () { return ''; }));
+    renderEditor();
+    var trs = editorTable.querySelectorAll('tbody tr');
+    if (trs.length) trs[trs.length - 1].scrollIntoView({ block: 'nearest' });
+  });
+  $('addCol').addEventListener('click', function () {
+    syncEditorFromDOM();
+    editor.header.push('列' + (editor.header.length + 1));
+    editor.rows.forEach(function (r) { r.push(''); });
+    renderEditor();
+  });
+  editorTable.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!(t instanceof HTMLButtonElement)) return;
+    if (t.hasAttribute('data-delrow')) {
+      syncEditorFromDOM();
+      editor.rows.splice(+t.getAttribute('data-delrow'), 1);
+      if (!editor.rows.length) editor.rows.push(editor.header.map(function () { return ''; }));
+      renderEditor();
+    } else if (t.hasAttribute('data-delcol')) {
+      if (editor.header.length <= 2) { showMsg('至少要保留 2 列（1 列自变量 + 1 列因变量）'); return; }
+      syncEditorFromDOM();
+      var c = +t.getAttribute('data-delcol');
+      editor.header.splice(c, 1);
+      editor.rows.forEach(function (r) { r.splice(c, 1); });
+      renderEditor();
+    }
+  });
+  $('manualCompute').addEventListener('click', function () {
+    syncEditorFromDOM();
+    var header = editor.header.map(function (v, i) {
+      var s = String(v).trim();
+      return s === '' ? '列' + (i + 1) : s;
+    });
+    var rows = editor.rows
+      .filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); })
+      .map(function (r) {
+        var out = r.slice(0, header.length);
+        while (out.length < header.length) out.push('');
+        return out;
+      });
+    if (!rows.length) { showMsg('表格里还没有数据，请先填写或粘贴'); return; }
+    try {
+      parseAndFit([header].concat(rows), '手动输入的数据', '手动表格', header);
+      $('resultCard').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      showMsg('计算失败：' + err.message);
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    if (lastFit) drawFitChart(lastFit);
+  });
+
+  renderEditor();
+})();
+</script>
+</body>
+</html>
